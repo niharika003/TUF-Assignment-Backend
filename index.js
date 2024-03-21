@@ -9,15 +9,16 @@ const app = express();
 const port = process.env.PORT || 3001;
 
 // Sequelize connection
-const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASSWORD,
-  {
-    host: process.env.DB_HOST,
-    dialect: "mysql",
-  }
-);
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+  dialect: "postgres",
+  ssl: true,
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false,
+    },
+  },
+});
 
 // Sequelize model
 const CodeSnippet = sequelize.define(
@@ -52,7 +53,7 @@ app.post("/api/snippets", async (req, res) => {
     res.status(500).send("Error saving the code snippet");
     console.error(err);
   }
-}); 
+});
 
 // API endpoint to retrieve all code snippets
 app.get("/api/snippets", async (req, res) => {
