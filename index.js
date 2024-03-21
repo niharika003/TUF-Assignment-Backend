@@ -121,23 +121,58 @@ app.post("/api/execute-code", async (req, res) => {
 
     if (judge0Response.data && judge0Response.data.token) {
       const token = judge0Response.data.token;
+      let stdout = null;
+      let resultResponse = null;
+      let retries = 12;
+      const delay = 5000;
 
-      const resultResponse = await axios({
-        method: "GET",
-        url: `https://judge0-ce.p.rapidapi.com/submissions/${token}`,
-        headers: {
-          "X-RapidAPI-Key": process.env.X_RAPID_API_KEY,
-          "X-RapidAPI-Host": process.env.X_RAPID_API_HOST,
-        },
-        params: {
-          base64_encoded: "false",
-        },
-      });
+      while (retries > 0) {
+        resultResponse = await axios.get(
+          `https://judge0-ce.p.rapidapi.com/submissions/${token}`,
+          {
+            headers: {
+              "X-RapidAPI-Key": process.env.X_RAPID_API_KEY,
+              "X-RapidAPI-Host": process.env.X_RAPID_API_HOST,
+            },
+            params: { base64_encoded: "false" }, 
+          }
+        );
+        if (resultResponse.response.status === 429) {
+          return res.status(503).json({
+            error: "Failed to execute the code.",
+            judgeError: resultResponse.data.message,
+          });
+        }
 
-      const { stdout } = resultResponse.data;
+        const statusId = resultResponse.data.status.id;
+
+        if (statusId > 2) {
+          stdout = resultResponse.data.stdout;
+          break;
+        }
+
+        await new Promise((r) => setTimeout(r, delay));
+        retries--;
+      }
+      console.log("Code Response: ", resultResponse);
+
+      if (!stdout) {
+        return res.status(503).json({
+          error:
+            "Failed to execute the code: execution did not complete within the expected time frame.",
+          judgeError: resultResponse.data.stderr,
+        });
+      }
+
       res.status(200).json({ stdout });
     }
   } catch (error) {
+    if (error.response.status === 429) {
+      return res.status(503).json({
+        error: "Failed to execute the code.",
+        judgeError: error.response.data.message,
+      });
+    }
     console.error("Error executing code:", error);
     res.status(500).json({ error: "Failed to execute the code" });
   }
